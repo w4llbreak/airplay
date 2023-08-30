@@ -9,3 +9,6 @@ edition = "2021"
 futures-util = "0.3.28"
 mdns = "3.0.0"
 tokio = { version = "1", features = ["full"] }
+
+[[bin]]
+name = "airplay"
