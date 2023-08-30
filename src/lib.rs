@@ -176,7 +176,7 @@ fn response_to_meta(response: Response) -> Option<AirPlayReceiverMeta> {
         _ => None,
     }?.clone();
 
-    let mut name = airplay_record_name.trim_end_matches("_airplay._tcp.local");
+    let mut name = airplay_record_name.trim_end_matches("._airplay._tcp.local");
 
     let airplay_entries: HashMap<&str, &str> = match &response.additional.iter().find(|x| x.name == airplay_record_name && match x.kind {
         RecordKind::TXT(_) => true,
