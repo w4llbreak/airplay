@@ -1,4 +1,4 @@
-use std::{time::Duration, net::IpAddr, collections::HashMap};
+use std::{time::Duration, net::IpAddr, collections::HashMap, io::Write};
 
 use futures_util::{StreamExt, pin_mut};
 use mdns::{Response, RecordKind};
@@ -259,29 +259,26 @@ fn response_to_meta(response: Response) -> Option<AirPlayReceiverMeta> {
 }
 
 pub async fn find() {
-    let stream = mdns::discover::all("_airplay._tcp.local", Duration::from_secs(15))
+    let stream = mdns::discover::all("_airplay._tcp.local", Duration::from_secs(1))
         .unwrap()
         .listen();
 
     pin_mut!(stream);
 
+    println!("looking...");
+
     while let Some(Ok(response)) = stream.next().await {
-        if response.additional.len() == 0 {
+        let meta = response_to_meta(response.clone());
+        if response.additional.len() == 0 { // TODO: better check
             println!("Received weird RAOP PTR broadcast.");
         } else {
-            let meta = response_to_meta(response.clone()).unwrap();
-            println!("{} ({})", meta.name, meta.device_id.as_ref().unwrap_or(&"?".to_string()));
+            if let Some(meta) = meta {
+                println!("{} ({})", meta.name, meta.device_id.as_ref().unwrap_or(&"?".to_string()));
+            } else {
+                println!("Unrecognized!");
+            }
             println!("{:#?}", response);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn it_works() {
-        find().await
+        std::io::stdout().flush().unwrap()
     }
 }
