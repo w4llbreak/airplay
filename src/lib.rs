@@ -258,7 +258,7 @@ fn response_to_meta(response: Response) -> Option<AirPlayReceiverMeta> {
     })
 }
 
-pub async fn find() {
+pub async fn look_for(name: String) -> Option<AirPlayReceiverMeta> {
     let stream = mdns::discover::all("_airplay._tcp.local", Duration::from_secs(1))
         .unwrap()
         .listen();
@@ -269,16 +269,18 @@ pub async fn find() {
 
     while let Some(Ok(response)) = stream.next().await {
         let meta = response_to_meta(response.clone());
-        if response.additional.len() == 0 { // TODO: better check
-            println!("Received weird RAOP PTR broadcast.");
-        } else {
-            if let Some(meta) = meta {
-                println!("{} ({})", meta.name, meta.device_id.as_ref().unwrap_or(&"?".to_string()));
-            } else {
-                println!("Unrecognized!");
+        
+        if let Some(meta) = meta {
+            println!("{} ({})", meta.name, meta.device_id.as_ref().unwrap_or(&"?".to_string()));
+
+            if name == meta.name {
+                return Some(meta);
             }
-            println!("{:#?}", response);
         }
+
         std::io::stdout().flush().unwrap()
+
     }
+
+    None
 }
