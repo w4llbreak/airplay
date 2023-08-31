@@ -68,7 +68,7 @@ impl Request {
         let cl: usize = match &self.body {
             Body::Plist(x) => {
                 let mut tmp: Vec<u8> = Vec::new();
-                x.to_writer_binary(&mut tmp);
+                x.to_writer_binary(&mut tmp).unwrap();
                 tmp.len()
             },
             Body::Raw(x) => x.len(),
