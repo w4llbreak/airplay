@@ -3,6 +3,8 @@ use std::{time::Duration, net::IpAddr, collections::HashMap, io::Write};
 use futures_util::{StreamExt, pin_mut};
 use mdns::{Response, RecordKind};
 
+pub mod rtsp;
+
 #[derive(Debug)]
 pub struct AirPlayFeatures {
     pub supports_video_v1: bool,
@@ -269,7 +271,7 @@ pub async fn look_for(name: String) -> Option<AirPlayReceiverMeta> {
 
     while let Some(Ok(response)) = stream.next().await {
         let meta = response_to_meta(response.clone());
-        
+
         if let Some(meta) = meta {
             println!("{} ({})", meta.name, meta.device_id.as_ref().unwrap_or(&"?".to_string()));
 
