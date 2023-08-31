@@ -1,9 +1,9 @@
-use airplay::{look_for, rtsp::{self}};
+use airplay::{mdns, rtsp};
 use plist::Dictionary;
 
 #[tokio::main]
 async fn main() {
-    let meta = look_for("Nappali (2)".to_string()).await.expect("Device not found");
+    let meta = mdns::look_for("Nappali (2)".to_string()).await.expect("Device not found");
 
     let mut client = rtsp::Client::connect((meta.ip_addresses.iter().find_map(|x| match x {
         std::net::IpAddr::V4(x) => Some(x),
