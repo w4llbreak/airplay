@@ -1,5 +1,5 @@
-use airplay::{mdns, rtsp};
-use plist::Dictionary;
+use airplay::{mdns, rtsp::{self, ops::SetupInfoRequest}};
+use plist::Data;
 
 #[tokio::main]
 async fn main() {
@@ -10,17 +10,29 @@ async fn main() {
         std::net::IpAddr::V6(_) => None,
     }).expect("No IPv4 address found for device").to_owned(), meta.port)).await.expect("Failed to connect to RTSP");
 
-    let mut info_req = Dictionary::new();
-    info_req.insert("qualifier".to_string(), plist::Value::Array(vec! [
-        plist::Value::String("txtAirPlay".to_string()),
-    ]));
-    let info_req = plist::Value::Dictionary(info_req);
+    let info = client.fetch_info().await.expect("Failed to fetch info");
+    println!("{:#?}", info);
 
-    let mut req = rtsp::Request::new(rtsp::Method::GET, "/info");
-    req.body = rtsp::Body::Plist(info_req);
-
-    let req = client.request(req).await.unwrap();
-    let res = req.await.unwrap();
-
-    println!("{:#?}", res);
+    let setup_info = client.setup_info(SetupInfoRequest {
+        device_id: "00:00:00:00:00:00".to_string(),
+        eiv: Data::new(vec![]),
+        ekey: Data::new(vec![]),
+        et: 0,
+        group_contains_group_leader: false,
+        group_uuid: "67EAD1FA-7EAB-4810-82F7-A9132FD2D0BB".to_string(),
+        is_multi_select_airplay: true,
+        mac_address: "00:00:00:00:00:00".to_string(),
+        model: "iPhone10,6".to_string(),
+        name: "crystal".to_string(),
+        os_build_version: "17B111".to_string(),
+        os_name: "iPhone OS".to_string(),
+        os_version: "13.2.3".to_string(),
+        sender_supports_relay: false,
+        session_uuid: "3195C737-1E6E-4487-BECB-4D287B7C7626".to_string(),
+        source_version: "409.16".to_string(),
+        timing_peer_info: vec![],
+        timing_peer_list: vec![],
+        timing_protocol: "PTP".to_string()
+    }).await.expect("Failed to setup");
+    println!("{:#?}", setup_info);
 }

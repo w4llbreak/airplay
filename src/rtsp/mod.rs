@@ -1,6 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, net::SocketAddr};
 
 use tokio::{net::{tcp::OwnedWriteHalf, ToSocketAddrs, TcpStream}, sync::{RwLock, oneshot, Mutex}, io::{AsyncWriteExt, AsyncReadExt, self}, task::JoinHandle};
+
+pub mod ops;
 
 #[derive(Clone, Copy)]
 #[allow(non_camel_case_types)]
@@ -35,7 +37,7 @@ impl ToString for Method {
 #[derive(Clone, Debug)]
 pub enum Body {
     None,
-    Plist(plist::Value),
+    PList(plist::Value),
     Raw(Vec<u8>),
 }
 
@@ -60,13 +62,19 @@ impl Request {
         }
     }
 
+    pub fn new_body(method: Method, path: impl ToString, body: Body) -> Request {
+        let mut req = Request::new(method, path);
+        req.body = body;
+        req
+    }
+
     pub fn set_header(&mut self, name: impl ToString, value: impl ToString) -> Option<String> {
         self.headers.insert(name.to_string(), value.to_string())
     }
 
     pub(crate) fn normalize(&mut self, seq: usize) {
         let cl: usize = match &self.body {
-            Body::Plist(x) => {
+            Body::PList(x) => {
                 let mut tmp: Vec<u8> = Vec::new();
                 x.to_writer_binary(&mut tmp).unwrap();
                 tmp.len()
@@ -86,11 +94,13 @@ impl Request {
 #[derive(Clone, Debug)]
 pub struct Response {
     pub status: i32,
+    pub status_string: String,
     pub headers: HashMap<String, String>,
     pub body: Body,
 }
 
 pub struct Client {
+    pub peer: SocketAddr,
     tx: OwnedWriteHalf,
     seq: RwLock<usize>,
     pending_seqs: Arc<Mutex<HashMap<usize, oneshot::Sender<Response>>>>,
@@ -100,17 +110,20 @@ pub struct Client {
 impl Client {
     pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, io::Error> {
         let stream = TcpStream::connect(addr).await.unwrap();
+        let peer = stream.peer_addr().unwrap();
         let (mut rx, tx) = stream.into_split();
 
         let pending_seqs: Arc<Mutex<HashMap<usize, oneshot::Sender<Response>>>> = Default::default();
 
         Ok(Client {
+            peer,
             tx,
             seq: RwLock::new(0),
             pending_seqs: pending_seqs.clone(),
             listener_handle: tokio::spawn(async move {
                 'request: loop {
                     let mut response_code = -1;
+                    let mut response_status = String::new();
                     let mut response_headers: HashMap<String, String> = HashMap::new();
                     let mut hanging: String = String::new();
                     let mut leftover: Vec<u8> = Vec::new();
@@ -142,7 +155,9 @@ impl Client {
                             parsed = _parsed;
 
                             if response_code == -1 {
-                                response_code = 9; // TODO: parse actual response code
+                                let (code, s) = x.split_once(' ').unwrap().1.split_once(' ').unwrap();
+                                response_code = str::parse(code).unwrap();
+                                response_status = s.to_string();
                             } else if x.len() == 0 {
                                 over = true;
                                 break;
@@ -180,7 +195,7 @@ impl Client {
                 
                         if ct == "application/x-apple-binary-plist" {
                             response_body = if let Ok(body) = plist::from_bytes::<plist::Value>(&body) {
-                                Body::Plist(body)
+                                Body::PList(body)
                             } else {
                                 Body::Raw(body)
                             }
@@ -191,6 +206,7 @@ impl Client {
 
                     let response = Response {
                         status: response_code,
+                        status_string: response_status,
                         headers: response_headers,
                         body: response_body,
                     };
@@ -230,7 +246,7 @@ impl Client {
         let mut req = req.as_bytes().to_vec();
 
         match &request.body {
-            Body::Plist(x) => {
+            Body::PList(x) => {
                 let mut body: Vec<u8> = Vec::new(); // TODO: preallocate capacity from Content-Length header
                 x.to_writer_binary(&mut body).unwrap();
                 req.extend(body);
